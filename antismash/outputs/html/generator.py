@@ -61,6 +61,7 @@ def write_regions_js(records: List[Dict[str, Any]], output_dir: str,
     """ Writes out the cluster and domain JSONs to file for the javascript sections
         of code"""
     with open(os.path.join(output_dir, 'regions.js'), 'w') as handle:
+        print(os.path.join(output_dir, 'regions.js'))
         handle.write("var recordData = %s;\n" % json.dumps(records, indent=4))
         regions = {"order": []}  # type: Dict[str, Any]
         for record in records:
@@ -114,9 +115,8 @@ def generate_webpage(records: List[Record], results: List[Dict[str, module_resul
     generate_searchgtr_htmls(records, options)
     json_records, js_domains = build_json_data(records, results, options)
     write_regions_js(json_records, options.output_dir, js_domains)
-
-    with open(os.path.join(options.output_dir, 'index.html'), 'w') as result_file:
-        template = FileTemplate(path.get_full_path(__file__, "templates", "overview.html"))
+    with open(os.path.join('.', 'index.html'), 'w') as result_file:
+        template = FileTemplate(path.get_full_path(__file__, "templates", "genome_viz.html"))
 
         options_layer = OptionsLayer(options)
         record_layers_with_regions = []
@@ -130,7 +130,7 @@ def generate_webpage(records: List[Record], results: List[Dict[str, module_resul
             results_by_record_id[record.id] = record_results
 
         regions_written = sum(len(record.get_regions()) for record in records)
-        job_id = os.path.basename(options.output_dir)
+        job_id = os.path.basename('.')
         page_title = ""
         if options.html_title:
             page_title = options.html_title
@@ -138,7 +138,7 @@ def generate_webpage(records: List[Record], results: List[Dict[str, module_resul
             page_title, _ = os.path.splitext(os.path.basename(options.sequences[0]))
         elif options.reuse_results:
             page_title, _ = os.path.splitext(os.path.basename(options.reuse_results))
-
+        #page_title='test'
         html_sections = generate_html_sections(record_layers_with_regions, results_by_record_id, options)
 
         svg_tooltip = ("Shows the layout of the region, marking coding sequences and areas of interest. "
@@ -151,14 +151,62 @@ def generate_webpage(records: List[Record], results: List[Dict[str, module_resul
         svg_tooltip += "<br>More detailed help is available %s." % docs_link("here", doc_target)
 
         aux = template.render(records=record_layers_with_regions, options=options_layer,
-                              version=options.version, extra_data=js_domains,
+                              version=1, extra_data=js_domains,
                               regions_written=regions_written, sections=html_sections,
                               results_by_record_id=results_by_record_id,
                               config=options, job_id=job_id, page_title=page_title,
                               records_without_regions=record_layers_without_regions,
                               svg_tooltip=svg_tooltip)
         result_file.write(aux)
+        return aux
 
+
+def generate_webpage_slim(records: List[Record], results: List[Dict[str, module_results.ModuleResults]],
+                     options: ConfigType) -> None:
+    """ Generates and writes the HTML itself """
+
+    generate_searchgtr_htmls(records, options)
+    json_records, js_domains = build_json_data(records, results, options)
+    write_regions_js(json_records, '.', js_domains)
+
+    with open(os.path.join('.', 'index.html'), 'w') as result_file:
+        template = FileTemplate(path.get_full_path(__file__, "templates", "overview2.html"))
+
+        options_layer = OptionsLayer(options)
+        record_layers_with_regions = []
+        record_layers_without_regions = []
+        results_by_record_id = {}  # type: Dict[str, Dict[str, module_results.ModuleResults]]
+        for record, record_results in zip(records, results):
+            if record.get_regions():
+                record_layers_with_regions.append(RecordLayer(record, None, options_layer))
+            else:
+                record_layers_without_regions.append(RecordLayer(record, None, options_layer))
+            results_by_record_id[record.id] = record_results
+
+        regions_written = sum(len(record.get_regions()) for record in records)
+        job_id = os.path.basename('.')
+        page_title='test'
+        html_sections = generate_html_sections(record_layers_with_regions, results_by_record_id, options)
+
+        svg_tooltip = ("Shows the layout of the region, marking coding sequences and areas of interest. "
+                       "Clicking a gene will select it and show any relevant details. "
+                       "Clicking an area feature (e.g. a candidate cluster) will select all coding "
+                       "sequences within that area. Double clicking an area feature will zoom to that area. "
+                       "Multiple genes and area features can be selected by clicking them while holding the Ctrl key."
+                       )
+        doc_target = "understanding_output/#the-antismash-5-region-concept"
+        svg_tooltip += ""
+
+        aux = template.render(records=record_layers_with_regions, options=options_layer,
+                              version=1, extra_data=js_domains,
+                              regions_written=regions_written, sections=html_sections,
+                              results_by_record_id=results_by_record_id,
+                              config=options, job_id=job_id, page_title=page_title,
+                              records_without_regions=record_layers_without_regions,
+                              svg_tooltip=svg_tooltip)
+
+        result_file.write(aux)
+        return aux
 
 def find_plugins_for_cluster(plugins: List[AntismashModule], cluster: Dict[str, Any]) -> List[AntismashModule]:
     "Find a specific plugin responsible for a given gene cluster type"
@@ -185,6 +233,8 @@ def generate_searchgtr_htmls(records: List[Record], options: ConfigType) -> None
     searchgtrformtemplateparts = load_searchgtr_search_form_template()
     # TODO store somewhere sane
     js.searchgtr_links = {}
+    print(gtrcoglist)
+    print(records)
     for record in records:
         for feature in record.get_cds_features():
             smcog_functions = feature.gene_functions.get_by_tool("smcogs")
